@@ -1,0 +1,13 @@
+Dear Hari dai;
+
+I went through the mail sent by Peter Oudhoff, at the same time I have some questions for the keyence and the Euro-mit.
+
+For Keyence
+1. In the method LJV7IF_GetStorageData there is some parameters (storage surface to read , data number to start reading from, number of items to read).
+   Question is: 
+	- Can you elaborate about storage surface to read?
+	- Can I estimate the "number of items to read" from the length of the materials (eg. 1000 mm = 1000) ?
+	- Is there any problem to fetch the data, if "Number of item to read" is not exactly same as the total number of data stored on the navigator controller (still method gives maximum value or gives error)? 
+
+For Euro-mit
+1. According to the peter Oudhoff, we do not need to made start and stop measurement that is because laser fetch data only for profiles (for each 1mm length) which we setup before measure. is it fine? 

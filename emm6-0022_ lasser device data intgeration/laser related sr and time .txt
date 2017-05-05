@@ -1,0 +1,7 @@
+EMM6-0022 304.75 (Software developement)
+emm6-0074 105     (Software development)
+emm6-0029  2.5 (remote testing with laser)
+emm6-0056  10 (Create necessary icons for laser device in emm system.)
+emm6-0083  15.5 (Laser data test with euro-mit)
+
+Total Hours: 437.75 Hours
