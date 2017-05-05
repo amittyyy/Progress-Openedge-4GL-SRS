@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="ISO8859-1" ?>
+<exportTable date-format="dmy" numeric-format="AMERICAN" recursive="No" DelTrigger="No">
+<table name="xsetting" version="0">
+<record>
+<field name="xsettsendtime" value="15:30:04"/>
+<field name="xsettsendxusec" value="amity_12070"/>
+<field name="xsetdsend" value="23/03/16"/>
+<field name="xsettsendtodb" value="SVN"/>
+<field name="xstac" value="ACT"/>
+<field name="xsetlreserved" value="no"/>
+<field name="xsetc" value="cmrcopies"/>
+<field name="xsett" value="4"/>
+<field name="xlevc" value="1"/>
+<field name="xsetm" value="defines numbers of printer report copies."/>
+<field name="xsetlprivate" value="no"/>
+</record>
+</table>
+</exportTable>

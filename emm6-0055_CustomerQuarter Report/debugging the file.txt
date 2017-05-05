@@ -1,0 +1,364 @@
+  def temp-table tt
+  field ctype   as char format "x(1)" column-label "T"
+  field colno   as char format "x(35)" column-label "EMS-obj-nr"
+  field doctype as char column-label "DocIn"
+  field docno   as char format "x(18)" column-label "DocnrIn"
+  field xstac   as char format "x(3)" column-label "Status"
+  field incsum  as date format "99/99/9999" column-label "InEntrepot"
+  field outcsum as date format "99/99/9999" column-label "OutEntrepot"
+  field inav    as date format "99/99/9999" column-label "InAV"
+  field outav   as date format "99/99/9999" column-label "OutAV"
+  field wgt     as inte format ">>>>>9" column-label "Weight"
+  field hscode  as char column-label "HS-code"
+  field fromcol as char 
+  field fromwgt as inte
+  field fromhs  as char
+  field cifval  as deci format "->,>>9.99" column-label "CIF-value"
+  field saleval as deci format "->,>>9.99" column-label "SALE-value"
+  field exems   as date format "99/99/9999" column-label "ExEMS"
+  field tskno   as inte format ">>>>>>9" column-label "PIO"
+  field ordno   as inte format ">>>>>9" column-label "Order"
+  field docout  as char column-label "DocOut"
+  field docnrout as char format "x(18)" column-label "DocnrOut"
+  field customs as char
+  field ttsrc as char
+  field wid as deci.
+    
+  for each ocoi no-lock where ocoi.xlevc = '1'
+  and ocoi.ocoitcoil = "R"
+  and ocoi.ocoidincsum GE date('01/11/15') and ocoi.ocoidincsum LT date('31/12/15'),
+  first pbil no-lock where pbil.xlevc = '1'
+  and pbil.pbiln = ocoi.pbiln,
+  first pshi no-lock where pshi.xlevc = '1'
+  and pshi.pshin = pbil.pshin
+  and pshi.gdctc = 'im7':
+    if ocoi.xstac = '900' then /*!! this might be confusing, 250 will have relation to acin !!*/
+    find first acin no-lock where acin.xlevc = '1' and acin.ocoin = ocoi.ocoin.
+
+     create tt.
+    assign
+      tt.ctype   = ocoi.ocoitcoil
+      tt.colno   = ocoi.ocoic
+      tt.doctype = pshi.gdctc
+      tt.docno   = string(pshi.pshincustomsno)
+      tt.xstac   = ocoi.xstac
+      tt.incsum  = ocoi.ocoidincsum
+      tt.outcsum = ocoi.ocoidoutcsum
+      tt.inav    = ocoi.ocoiddateinav
+      tt.outav   = ocoi.ocoidoutav
+      tt.wgt     = ocoi.ocoinweight
+     /* tt.hscode  = FN_HsCode(ocoi.ocoiawidth,ocoi.gjobc,"coil",ocoi.ggrac)*/
+      tt.fromcol = ?
+      tt.fromwgt = ?
+      tt.fromhs  = ?
+      tt.cifval  = ocoi.ocoiapurchval
+      tt.saleval = 0
+      tt.exems   = ?
+      tt.tskno   = if avail acin then acin.atasn else ?
+      tt.ordno   = ocoi.sordn
+      tt.customs = ocoi.ocoitcustoms
+      tt.ttsrc = "R1"
+      tt.wid = ocoi.ocoiawidth
+      .
+
+   release acin.
+    for first pcal no-lock where pcal.xlevc = '1'
+    and pcal.pcaln = ocoi.pcaln:
+      assign
+        tt.doctype = "FIAT"
+        tt.docno = pcal.pcaltextref.
+
+      DISPLAY tt.
+    end.
+  END.  /* total 226*/     
+    
+  def temp-table tt
+  field ctype   as char format "x(1)" column-label "T"
+  field colno   as char format "x(35)" column-label "EMS-obj-nr"
+  field doctype as char column-label "DocIn"
+  field docno   as char format "x(18)" column-label "DocnrIn"
+  field xstac   as char format "x(3)" column-label "Status"
+  field incsum  as date format "99/99/9999" column-label "InEntrepot"
+  field outcsum as date format "99/99/9999" column-label "OutEntrepot"
+  field inav    as date format "99/99/9999" column-label "InAV"
+  field outav   as date format "99/99/9999" column-label "OutAV"
+  field wgt     as inte format ">>>>>9" column-label "Weight"
+  field hscode  as char column-label "HS-code"
+  field fromcol as char 
+  field fromwgt as inte
+  field fromhs  as char
+  field cifval  as deci format "->,>>9.99" column-label "CIF-value"
+  field saleval as deci format "->,>>9.99" column-label "SALE-value"
+  field exems   as date format "99/99/9999" column-label "ExEMS"
+  field tskno   as inte format ">>>>>>9" column-label "PIO"
+  field ordno   as inte format ">>>>>9" column-label "Order"
+  field docout  as char column-label "DocOut"
+  field docnrout as char format "x(18)" column-label "DocnrOut"
+  field customs as char
+  field ttsrc as char
+  field wid as deci.
+  DEFINE VARIABLE v-COUNT AS INT INIT 0   NO-UNDO.
+ for each ocoi no-lock where ocoi.xlevc = '1'
+  and ocoi.xstac = '800'
+  and ocoi.ocoidoutcsum GE date('01/11/15') and ocoi.ocoidoutcsum LT DATE('31/12/15'),
+  first acot no-lock where acot.xlevc = '1'
+  and acot.ocoin = ocoi.ocoin:
+    if ocoi.sordn GT 0 then
+    find first sord no-lock where sord.xlevc = '1' and sord.sordn = ocoi.sordn.
+    create tt.
+    assign
+      tt.ctype   = ocoi.ocoitcoil
+      tt.colno   = ocoi.ocoic
+      tt.doctype = ''
+      tt.docno   = ''
+      tt.xstac   = ocoi.xstac
+      tt.incsum  = ocoi.ocoidincsum
+      tt.outcsum = ocoi.ocoidoutcsum
+      tt.inav    = ocoi.ocoiddateinav
+      tt.outav   = ocoi.ocoidoutav
+      tt.wgt     = ocoi.ocoinweight
+   /*   tt.hscode  = FN_HsCode(ocoi.ocoiawidth,ocoi.gjobc,"coil",ocoi.ggrac)*/
+      tt.fromcol = ?
+      tt.fromwgt = ?
+      tt.fromhs  = ?
+      tt.cifval  = ocoi.ocoiapurchval
+      tt.saleval = if ocoi.sordn GT 0 then sord.sordaordprice else 0
+      tt.exems   = ocoi.ocoidexems
+      tt.tskno   = if avail acot then acot.atasn else ?
+      tt.ordno   = ocoi.sordn
+      tt.customs = ocoi.ocoitcustoms
+      tt.docout  = ocoi.gdctc
+      tt.docnrout = ocoi.ocoitdocno
+      tt.ttsrc = "F1"
+      tt.wid = ocoi.ocoiawidth
+      .
+    if tt.docnrout begins "ART546" then assign tt.docnrout = "ART546".
+    v-count = v-count + 1.
+   
+   RELEASE sord.
+  end.     /*27*/
+  
+  
+    def temp-table tt
+  field ctype   as char format "x(1)" column-label "T"
+  field colno   as char format "x(35)" column-label "EMS-obj-nr"
+  field doctype as char column-label "DocIn"
+  field docno   as char format "x(18)" column-label "DocnrIn"
+  field xstac   as char format "x(3)" column-label "Status"
+  field incsum  as date format "99/99/9999" column-label "InEntrepot"
+  field outcsum as date format "99/99/9999" column-label "OutEntrepot"
+  field inav    as date format "99/99/9999" column-label "InAV"
+  field outav   as date format "99/99/9999" column-label "OutAV"
+  field wgt     as inte format ">>>>>9" column-label "Weight"
+  field hscode  as char column-label "HS-code"
+  field fromcol as char 
+  field fromwgt as inte
+  field fromhs  as char
+  field cifval  as deci format "->,>>9.99" column-label "CIF-value"
+  field saleval as deci format "->,>>9.99" column-label "SALE-value"
+  field exems   as date format "99/99/9999" column-label "ExEMS"
+  field tskno   as inte format ">>>>>>9" column-label "PIO"
+  field ordno   as inte format ">>>>>9" column-label "Order"
+  field docout  as char column-label "DocOut"
+  field docnrout as char format "x(18)" column-label "DocnrOut"
+  field customs as char
+  field ttsrc as char
+  field wid as deci.
+  DEFINE VARIABLE v-COUNT AS INT INIT 0   NO-UNDO.
+for each ocoi no-lock where ocoi.xlevc = '1'
+  and ocoi.xstac = '995'
+  and ocoi.ocoidoutcsum GE DATE('01/11/15') and ocoi.ocoidoutcsum LT DATE('31/12/15'),
+  first cpal no-lock where cpal.xlevc = '1'
+  and cpal.cpaln = ocoi.cpaln
+  and cpal.xstac = '900',
+  first acot no-lock where acot.xlevc = '1'
+  and acot.ocoin = ocoi.ocoin:
+    if ocoi.sordn GT 0 then
+    find first sord no-lock where sord.xlevc = '1' and sord.sordn = ocoi.sordn.
+    create tt.
+    assign
+      tt.ctype   = ocoi.ocoitcoil
+      tt.colno   = ocoi.ocoic
+      tt.doctype = ''
+      tt.docno   = ''
+      tt.xstac   = '800'
+      tt.incsum  = ocoi.ocoidincsum
+      tt.outcsum = ocoi.ocoidoutcsum
+      tt.inav    = ocoi.ocoiddateinav
+      tt.outav   = ocoi.ocoidoutav
+      tt.wgt     = ocoi.ocoinweight
+    /*  tt.hscode  = FN_HsCode(ocoi.ocoiawidth,ocoi.gjobc,"laminations",ocoi.ggrac)*/
+      tt.fromcol = ?
+      tt.fromwgt = ?
+      tt.fromhs  = ?
+      tt.cifval  = ocoi.ocoiapurchval
+      tt.saleval = if ocoi.sordn GT 0 then sord.sordaordprice else 0
+      tt.exems   = ocoi.ocoidexems
+      tt.tskno   = if avail acot then acot.atasn else ?
+      tt.ordno   = ocoi.sordn
+      tt.customs = ocoi.ocoitcustoms
+      tt.docout  = ocoi.gdctc
+      tt.docnrout = ocoi.ocoitdocno
+      tt.ttsrc = "F2"
+      tt.wid = ocoi.ocoiawidth
+      .
+    if tt.docnrout begins "ART546" then assign tt.docnrout = "ART546".
+
+    v-count = v-count + 1.
+   DISPLAY TT.
+   RELEASE sord.
+  end.     /*27*/
+
+MESSAGE V-COUNT
+    VIEW-AS ALERT-BOX INFO BUTTONS OK. /*0*/
+
+
+	 def temp-table tt
+  field ctype   as char format "x(1)" column-label "T"
+  field colno   as char format "x(35)" column-label "EMS-obj-nr"
+  field doctype as char column-label "DocIn"
+  field docno   as char format "x(18)" column-label "DocnrIn"
+  field xstac   as char format "x(3)" column-label "Status"
+  field incsum  as date format "99/99/9999" column-label "InEntrepot"
+  field outcsum as date format "99/99/9999" column-label "OutEntrepot"
+  field inav    as date format "99/99/9999" column-label "InAV"
+  field outav   as date format "99/99/9999" column-label "OutAV"
+  field wgt     as inte format ">>>>>9" column-label "Weight"
+  field hscode  as char column-label "HS-code"
+  field fromcol as char 
+  field fromwgt as inte
+  field fromhs  as char
+  field cifval  as deci format "->,>>9.99" column-label "CIF-value"
+  field saleval as deci format "->,>>9.99" column-label "SALE-value"
+  field exems   as date format "99/99/9999" column-label "ExEMS"
+  field tskno   as inte format ">>>>>>9" column-label "PIO"
+  field ordno   as inte format ">>>>>9" column-label "Order"
+  field docout  as char column-label "DocOut"
+  field docnrout as char format "x(18)" column-label "DocnrOut"
+  field customs as char
+  field ttsrc as char
+  field wid as deci.
+  DEFINE VARIABLE v-COUNT AS INT INIT 0   NO-UNDO.
+  def var vUsedWgt as inte no-undo.
+  def var vProdWgt as inte no-undo.
+  ASSIGN vUsedWgt = 0.
+  ASSIGN vProdWgt = 0.
+def buffer bfUsedcoil for ocoil.
+
+   for each atas no-lock where atas.xlevc = '1'
+  and atas.xstac GE '900'
+  and atas.atasdenddate GT DATE('01/11/2015') and atas.atasdenddate LE DATE('31/12/2015'),
+  first bfUsedcoil no-lock where bfUsedcoil.xlevc = '1'
+  and bfUsedcoil.ocoic = atas.atastcolname
+/*  and bfUsedcoil.ocoitcustoms NE 'EU':*/
+  and bfUsedcoil.ocoileu = false:
+    vUsedwgt = 0. vProdwgt = 0.
+    for each acin no-lock where acin.xlevc = '1'
+    and acin.atasn = atas.atasn,
+    first ocoi no-lock where ocoi.xlevc = '1'
+    and ocoi.ocoin = acin.ocoin:
+      vUsedWgt = vUsedwgt + ocoi.ocoinweight.
+      if not can-find(first tt where tt.colno = ocoi.ocoic) then do:
+        if ocoi.sordn GT 0 then
+        find first sord no-lock where sord.xlevc = '1' and sord.sordn = ocoi.sordn.
+        create tt.
+        assign
+          tt.ctype   = ocoi.ocoitcoil
+          tt.colno   = ocoi.ocoic
+          tt.doctype = ocoi.gdctc
+          tt.docno   = ocoi.ocoitdocno
+          tt.xstac   = ocoi.xstac
+          tt.incsum  = ocoi.ocoidincsum
+          tt.outcsum = ocoi.ocoidoutcsum
+          tt.inav    = ocoi.ocoiddateinav
+          tt.outav   = ocoi.ocoidoutav
+          tt.wgt     = ocoi.ocoinweight
+       /*   tt.hscode  = FN_HsCode(ocoi.ocoiawidth,ocoi.gjobc,"coil",ocoi.ggrac)*/
+          tt.fromcol = ?
+          tt.fromwgt = ?
+          tt.fromhs  = ?
+          tt.cifval  = ocoi.ocoiapurchval
+          tt.saleval = if ocoi.sordn GT 0 then sord.sordaordprice else 0
+          tt.exems   = ocoi.ocoidexems
+          tt.tskno   = atas.atasn
+          tt.ordno   = ocoi.sordn
+          tt.customs = ocoi.ocoitcustoms
+          tt.ttsrc = "T1"
+          tt.wid = ocoi.ocoiawidth
+          .    
+          if ocoi.ocoitcustoms = 'AV' then
+          do:
+               assign tt.customs = "USED".
+          end.
+      end.
+    end.
+    for each acot no-lock where acot.xlevc = '1'
+    and acot.atasn = atas.atasn,
+    first ocoi no-lock where ocoi.xlevc = '1'
+    and ocoi.ocoin = acot.ocoin:
+      vProdWgt = vProdWgt + ocoi.ocoinweight.
+      if not can-find(first tt where tt.colno = ocoi.ocoic) then do:
+        if ocoi.sordn GT 0 then
+        find first sord no-lock where sord.xlevc = '1' and sord.sordn = ocoi.sordn.
+        create tt.
+        assign
+          tt.ctype   = ocoi.ocoitcoil
+          tt.colno   = ocoi.ocoic
+          tt.docout   = ocoi.gdctc
+          tt.docnrout = ocoi.ocoitdocno
+          tt.xstac   = ocoi.xstac
+          tt.incsum  = ocoi.ocoidincsum
+          tt.outcsum = ocoi.ocoidoutcsum
+          tt.inav    = ocoi.ocoiddateinav
+          tt.outav   = ocoi.ocoidoutav
+          tt.wgt     = ocoi.ocoinweight
+         /* tt.hscode  = FN_HsCode(ocoi.ocoiawidth,ocoi.gjobc,if ocoi.sordn GT 0 then sord.sordtproduct else "coils",ocoi.ggrac)*/
+          tt.fromcol = ?
+          tt.fromwgt = ?
+          tt.fromhs  = ?
+          tt.cifval  = ocoi.ocoiapurchval
+          tt.saleval = if ocoi.sordn GT 0 then sord.sordaordprice else 0
+          tt.exems   = ocoi.ocoidexems
+          tt.tskno   = atas.atasn
+          tt.ordno   = ocoi.sordn
+          tt.customs = ocoi.ocoitcustoms
+          tt.ttsrc = "T2"
+          tt.wid = ocoi.ocoiawidth
+          .
+        if tt.docnrout begins "ART546" then assign tt.docnrout = "ART546".
+        if ocoi.xstac = '900' /*and ocoi.ocoinweight = 0*/ then assign tt.customs = "USED". /* necessary coz of scrapping coils!*/
+        if ocoi.xstac = '800' then assign tt.customs = "EXIT". /* */
+      end.
+    end.
+    create tt.
+    assign
+      tt.ctype   = "X"
+      tt.colno   = bfUsedcoil.ocoic + "SCRAP"
+      tt.doctype = ''
+      tt.docno   = ''
+      tt.xstac   = '200'
+      tt.incsum  = atas.atasdenddate
+      tt.outcsum = ?
+      tt.inav    = atas.atasdenddate
+      tt.outav   = atas.atasdenddate
+      tt.wgt     = vUsedWgt - vProdWgt
+      tt.hscode  = "7204290010000000000000"
+      tt.fromcol = ?
+      tt.fromwgt = ?
+      tt.fromhs  = ?
+      tt.cifval  = bfUsedcoil.ocoiapurchval
+      tt.saleval = 0
+      tt.exems   = ?
+      tt.tskno   = atas.atasn
+      tt.ordno   = 0
+      tt.customs = 'ENTREPOT'
+      tt.ttsrc = "T3"
+      tt.wid = 0
+      .
+    v-count = v-count + 1. 
+   /* DISPLAY tt .*/
+  end.
+  MESSAGE v-count
+      VIEW-AS ALERT-BOX INFO BUTTONS OK. /*171*/
+
+

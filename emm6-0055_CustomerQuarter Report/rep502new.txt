@@ -1,0 +1,1248 @@
+/* ---------------------- Euro-Mit Staal bv Vlissingen -------------------------
+File : rep/rep502.p
+Description : ZUIVERING
+Parameters-in-emm5:
+Tables used : 
+
+Version    Author Description
+---------- ------ --------------------------------------------------------------
+1.00       ku     [EMM6-0003] : Modified logic for the report 502 so that the 
+                  user now doesn't have to generate report in csv format, 
+                  but rather directly creates the excel sheet avoiding the mistakes from user side.
+1.01      Amity   [EMM6-0055] Modifying the logic of Customs quarter report.
+------------------------------------------------------------------------------*/
+
+{rep/rep502.s}
+{x/xxxxrhedel.i &mode = C &nohead = true &noparam = true}
+
+function FN_HsCode returns char (input pWid as deci,input pJob as char,input pProduct as char,input pGrade as char) forward.
+function f-column returns character ( input v-row as int, input v-col as int) forward.
+
+def var iFromdate as date no-undo init 4/1/2015.
+def var iTodate   as date no-undo init 5/1/2015.
+def var iDetails as logi no-undo initial true.
+
+def var gProducer as char no-undo init "C041".
+
+assign
+  iDetails = v-details
+  iFromdate = v-datefrom
+  iTodate = v-dateto
+  .
+def var nTotal1 as inte no-undo.
+def var qTotal1 as inte no-undo.
+def var nTotal2 as inte no-undo.
+def var qTotal2 as inte no-undo.
+def var n as inte no-undo.
+def var q as inte no-undo.
+def var vUsedWgt as inte no-undo.
+def var vProdWgt as inte no-undo.
+
+def buffer bfUsedcoil for ocoil.
+def buffer bProd for ocoil.
+def buffer b-coil for ocoil.
+
+def var vFname as char no-undo.
+def temp-table tt2
+  field coil    as char
+  field id      as char format "x(35)"
+  field qty     as inte
+  field area    as char
+  field datebgn as date
+  field hscode  as char
+  .
+def temp-table tt
+  field ctype   as char format "x(1)" column-label "T"
+  field colno   as char format "x(35)" column-label "EMS-obj-nr"
+  field doctype as char column-label "DocIn"
+  field docno   as char format "x(18)" column-label "DocnrIn"
+  field xstac   as char format "x(3)" column-label "Status"
+  field incsum  as date column-label "InEntrepot"
+  field outcsum as date column-label "OutEntrepot"
+  field inav    as date column-label "InAV"
+  field outav   as date column-label "OutAV"
+  field wgt     as inte format ">>>>>9" column-label "Weight"
+  field hscode  as char column-label "HS-code"
+  field fromcol as char 
+  field fromwgt as inte
+  field fromhs  as char
+  field cifval  as deci column-label "CIF-value"
+  field saleval as deci column-label "SALE-value"
+  field exems   as date column-label "ExEMS"
+  field tskno   as inte format ">>>>>>9" column-label "PIO"
+  field ordno   as inte format ">>>>>9" column-label "Order"
+  field docout  as char column-label "DocOut"
+  field docnrout as char format "x(18)" column-label "DocnrOut"
+  field customs as char
+  field ttsrc as char
+  field wid as deci
+  .
+
+
+if v-R1 = true then run ipR1. /*entrepot*/
+if v-R2 = true then run ipR2. /*av*/
+if v-R3 = true then run ipR3. /*inslag entrepot*/
+if v-R4 = true then run ipR4. /*uitslag entrepot*/
+if v-R5 = true then run ipR5. /*inslag av*/
+if v-R6 = true then run ipR6. /*uitslag av*/
+if v-R7 = true then run ipR7. /*zuivering*/
+
+/*---PROCEDURES-------------------------------------------------------*/
+
+PROCEDURE ipInit:
+  for each tt: delete tt. end.
+  for each tt2: delete tt2. end.
+  assign
+    nTotal1 = 0
+    qTotal1 = 0
+    nTotal2 = 0
+    qTotal2 = 0
+    n = 0
+    q = 0
+    vUsedWgt = 0
+    vProdWgt = 0.
+END PROCEDURE.
+
+PROCEDURE ipR7:
+  run ipInit.
+    /* notes: create a line per id
+    a) route 1 = R into ENTREPOT
+    b) route 2+3 = R/S from ENTREPOT into AV and S/F/X from AV into ENTREPOT
+    c) route 4+5 = F/X from AV
+    */
+  
+    /*add lines rm used */
+    for each ocoi no-lock where ocoi.xlevc = '1':  
+        if  ocoi.ocoitcoil = "R" and ocoi.ocoidincsum GE iFromdate and ocoi.ocoidincsum LT iTodate then   /* Amity: [EMM6-0055] */
+        do:
+            find first pbil no-lock where pbil.xlevc = '1'
+                and pbil.pbiln = ocoil.pbiln.
+            if avail pbilllade then 
+            do:
+                for first pshi no-lock where pshi.xlevc = '1'
+                    and pshi.pshin = pbil.pshin
+                    and pshi.gdctc = 'im7'.
+                
+                    if ocoi.xstac = '900' then /*!! this might be confusing, 250 will have relation to acin !!*/
+                        find first acin no-lock where acin.xlevc = '1' and acin.ocoin = ocoi.ocoin.
+                    if avail acin then 
+                    do:
+                        create tt.
+                        assign
+                            tt.ctype   = ocoi.ocoitcoil
+                            tt.colno   = ocoi.ocoic
+                            tt.doctype = pshi.gdctc
+                            tt.docno   = string(pshi.pshincustomsno)
+                            tt.xstac   = ocoi.xstac
+                            tt.incsum  = ocoi.ocoidincsum
+                            tt.outcsum = ocoi.ocoidoutcsum
+                            tt.inav    = ocoi.ocoiddateinav
+                            tt.outav   = ocoi.ocoidoutav
+                            tt.wgt     = ocoi.ocoinweight
+                            tt.hscode  = FN_HsCode(ocoi.ocoiawidth,ocoi.gjobc,"coil",ocoi.ggrac)
+                            tt.fromcol = ?
+                            tt.fromwgt = ?
+                            tt.fromhs  = ?
+                            tt.cifval  = ocoi.ocoiapurchval
+                            tt.saleval = 0
+                            tt.exems   = ?
+                            tt.tskno   = if avail acin then acin.atasn else ?
+                            tt.ordno   = ocoi.sordn
+                            tt.customs = ocoi.ocoitcustoms
+                            tt.ttsrc   = "R1"
+                            tt.wid     = ocoi.ocoiawidth
+                            .
+                        release acin.
+                        for first pcal no-lock where pcal.xlevc = '1'
+                            and pcal.pcaln = ocoi.pcaln:
+                            assign
+                                tt.doctype = "FIAT"
+                                tt.docno   = pcal.pcaltextref.
+                        end.
+                    end.
+                end.
+            end.
+        end.
+  
+        /* adding lines coils departed*/
+        if  ocoi.xstac = '800' and ocoi.ocoidoutcsum GE iFromdate and ocoi.ocoidoutcsum LT iTodate then  /* Amity: [EMM6-0055] Removed the for each loop of ocoil*/
+        do:     
+            find first acot no-lock where acot.xlevc = '1'
+                and acot.ocoin = ocoi.ocoin.
+            if avail acot then 
+            do:
+                if ocoi.sordn GT 0 then
+                    find first sord no-lock where sord.xlevc = '1' and sord.sordn = ocoi.sordn.
+                if avail sorder then 
+                do:
+                    create tt.
+                    assign
+                        tt.ctype    = ocoi.ocoitcoil
+                        tt.colno    = ocoi.ocoic
+                        tt.doctype  = ''
+                        tt.docno    = ''
+                        tt.xstac    = ocoi.xstac
+                        tt.incsum   = ocoi.ocoidincsum
+                        tt.outcsum  = ocoi.ocoidoutcsum
+                        tt.inav     = ocoi.ocoiddateinav
+                        tt.outav    = ocoi.ocoidoutav
+                        tt.wgt      = ocoi.ocoinweight
+                        tt.hscode   = FN_HsCode(ocoi.ocoiawidth,ocoi.gjobc,"coil",ocoi.ggrac)
+                        tt.fromcol  = ?
+                        tt.fromwgt  = ?
+                        tt.fromhs   = ?
+                        tt.cifval   = ocoi.ocoiapurchval
+                        tt.saleval  = if ocoi.sordn GT 0 then sord.sordaordprice else 0
+                        tt.exems    = ocoi.ocoidexems
+                        tt.tskno    = if avail acot then acot.atasn else ?
+                        tt.ordno    = ocoi.sordn
+                        tt.customs  = ocoi.ocoitcustoms
+                        tt.docout   = ocoi.gdctc
+                        tt.docnrout = ocoi.ocoitdocno
+                        tt.ttsrc    = "F1"
+                        tt.wid      = ocoi.ocoiawidth
+                        .
+                    if tt.docnrout begins "ART546" then assign tt.docnrout = "ART546".
+                end.
+            end.
+        end.
+
+        /* adding lines lams departed*/
+        if ocoi.xstac = '995' and ocoi.ocoidoutcsum GE iFromdate and ocoi.ocoidoutcsum LT iTodate then  /* Amity: [EMM6-0055] Removed the for each loop of ocoil*/
+        do:
+            find first cpal no-lock where cpal.xlevc = '1'
+                and cpal.cpaln = ocoi.cpaln
+                and cpal.xstac = '900'.
+            if avail cpallet then 
+            do:
+                find first acot no-lock where acot.xlevc = '1'
+                    and acot.ocoin = ocoi.ocoin.
+                if avail acot then
+                do:
+                    if ocoi.sordn GT 0 then
+                        find first sord no-lock where sord.xlevc = '1' and sord.sordn = ocoi.sordn.
+                    if avail sorder then 
+                    do:
+                        create tt.
+                        assign
+                            tt.ctype    = ocoi.ocoitcoil
+                            tt.colno    = ocoi.ocoic
+                            tt.doctype  = ''
+                            tt.docno    = ''
+                            tt.xstac    = '800'
+                            tt.incsum   = ocoi.ocoidincsum
+                            tt.outcsum  = ocoi.ocoidoutcsum
+                            tt.inav     = ocoi.ocoiddateinav
+                            tt.outav    = ocoi.ocoidoutav
+                            tt.wgt      = ocoi.ocoinweight
+                            tt.hscode   = FN_HsCode(ocoi.ocoiawidth,ocoi.gjobc,"laminations",ocoi.ggrac)
+                            tt.fromcol  = ?
+                            tt.fromwgt  = ?
+                            tt.fromhs   = ?
+                            tt.cifval   = ocoi.ocoiapurchval
+                            tt.saleval  = if ocoi.sordn GT 0 then sord.sordaordprice else 0
+                            tt.exems    = ocoi.ocoidexems
+                            tt.tskno    = if avail acot then acot.atasn else ?
+                            tt.ordno    = ocoi.sordn
+                            tt.customs  = ocoi.ocoitcustoms
+                            tt.docout   = ocoi.gdctc
+                            tt.docnrout = ocoi.ocoitdocno
+                            tt.ttsrc    = "F2"
+                            tt.wid      = ocoi.ocoiawidth
+                            .
+                        if tt.docnrout begins "ART546" then assign tt.docnrout = "ART546".
+                    end.
+                end.
+            end.
+        end.
+    end.
+ 
+  /* add lines srm used */
+  for each atas no-lock where atas.xlevc = '1'
+  and atas.xstac GE '900'
+  and atas.atasdenddate GE iFromdate and atas.atasdenddate LT iTodate,
+  first bfUsedcoil no-lock where bfUsedcoil.xlevc = '1'
+  and bfUsedcoil.ocoic = atas.atastcolname
+/*  and bfUsedcoil.ocoitcustoms NE 'EU':*/
+  and bfUsedcoil.ocoileu = false:
+    vUsedwgt = 0. vProdwgt = 0.
+    
+    for each acin no-lock where acin.xlevc = '1'
+    and acin.atasn = atas.atasn,
+    first ocoi no-lock where ocoi.xlevc = '1'
+    and ocoi.ocoin = acin.ocoin:
+      vUsedWgt = vUsedwgt + ocoi.ocoinweight.
+      if not can-find(first tt where tt.colno = ocoi.ocoic) then do:
+        if ocoi.sordn GT 0 then
+        find first sord no-lock where sord.xlevc = '1' and sord.sordn = ocoi.sordn.
+        create tt.
+        assign
+          tt.ctype   = ocoi.ocoitcoil
+          tt.colno   = ocoi.ocoic
+          tt.doctype = ocoi.gdctc
+          tt.docno   = ocoi.ocoitdocno
+          tt.xstac   = ocoi.xstac
+          tt.incsum  = ocoi.ocoidincsum
+          tt.outcsum = ocoi.ocoidoutcsum
+          tt.inav    = ocoi.ocoiddateinav
+          tt.outav   = ocoi.ocoidoutav
+          tt.wgt     = ocoi.ocoinweight
+          tt.hscode  = FN_HsCode(ocoi.ocoiawidth,ocoi.gjobc,"coil",ocoi.ggrac)
+          tt.fromcol = ?
+          tt.fromwgt = ?
+          tt.fromhs  = ?
+          tt.cifval  = ocoi.ocoiapurchval
+          tt.saleval = if ocoi.sordn GT 0 then sord.sordaordprice else 0
+          tt.exems   = ocoi.ocoidexems
+          tt.tskno   = atas.atasn
+          tt.ordno   = ocoi.sordn
+          tt.customs = ocoi.ocoitcustoms
+          tt.ttsrc = "T1"
+          tt.wid = ocoi.ocoiawidth
+          .
+          if ocoi.ocoitcustoms = 'AV' then
+          do:
+               assign tt.customs = "USED".
+          end.
+              
+      end.
+    end.
+    
+    for each acot no-lock where acot.xlevc = '1'
+    and acot.atasn = atas.atasn,
+    first ocoi no-lock where ocoi.xlevc = '1'
+    and ocoi.ocoin = acot.ocoin:
+      vProdWgt = vProdWgt + ocoi.ocoinweight.
+      if not can-find(first tt where tt.colno = ocoi.ocoic) then do:
+        if ocoi.sordn GT 0 then
+        find first sord no-lock where sord.xlevc = '1' and sord.sordn = ocoi.sordn.
+        create tt.
+        assign
+          tt.ctype   = ocoi.ocoitcoil
+          tt.colno   = ocoi.ocoic
+          tt.docout   = ocoi.gdctc
+          tt.docnrout = ocoi.ocoitdocno
+          tt.xstac   = ocoi.xstac
+          tt.incsum  = ocoi.ocoidincsum
+          tt.outcsum = ocoi.ocoidoutcsum
+          tt.inav    = ocoi.ocoiddateinav
+          tt.outav   = ocoi.ocoidoutav
+          tt.wgt     = ocoi.ocoinweight
+          tt.hscode  = FN_HsCode(ocoi.ocoiawidth,ocoi.gjobc,if ocoi.sordn GT 0 then sord.sordtproduct else "coils",ocoi.ggrac)
+          tt.fromcol = ?
+          tt.fromwgt = ?
+          tt.fromhs  = ?
+          tt.cifval  = ocoi.ocoiapurchval
+          tt.saleval = if ocoi.sordn GT 0 then sord.sordaordprice else 0
+          tt.exems   = ocoi.ocoidexems
+          tt.tskno   = atas.atasn
+          tt.ordno   = ocoi.sordn
+          tt.customs = ocoi.ocoitcustoms
+          tt.ttsrc = "T2"
+          tt.wid = ocoi.ocoiawidth
+          .
+          
+/*    FOR EACH b-coil WHERE b-coil.ocoic = ocoi.ocoic NO-LOCK:                               */
+/*        FOR EACH cpal where cpal.cpaln = b-coil.cpaln NO-LOCK:                             */
+/*            FOR EACH ttruc WHERE ttruc.ttruc = cpal.ttruc NO-LOCK:                         */
+/*                find first tdocument where tdocument.ttruc = ttruck.ttruc no-lock no-error.*/ 
+/*                assign                                                                     */
+/*                     tt.docout   = tdocument.gdctc                                         */
+/*                     tt.docnrout = ttruck.tdocc                                            */
+/*                     .                                                                     */
+/*            END.                                                                           */
+/*        END.                                                                               */
+/*    END.                                                                                   */
+          
+        if tt.docnrout begins "ART546" then assign tt.docnrout = "ART546".
+        
+        if ocoi.xstac = '900' /*and ocoi.ocoinweight = 0*/ then assign tt.customs = "USED". /* necessary coz of scrapping coils!*/
+        if ocoi.xstac = '800' then assign tt.customs = "EXIT". /* */
+        
+        
+      end.
+    end.
+    create tt.
+    assign
+      tt.ctype   = "X"
+      tt.colno   = bfUsedcoil.ocoic + "SCRAP"
+      tt.doctype = ''
+      tt.docno   = ''
+      tt.xstac   = '200'
+      tt.incsum  = atas.atasdenddate
+      tt.outcsum = ?
+      tt.inav    = atas.atasdenddate
+      tt.outav   = atas.atasdenddate
+      tt.wgt     = vUsedWgt - vProdWgt
+      tt.hscode  = "7204290010" + /*"00" +*/ "0000" + "00000000"
+      tt.fromcol = ?
+      tt.fromwgt = ?
+      tt.fromhs  = ?
+      tt.cifval  = bfUsedcoil.ocoiapurchval
+      tt.saleval = 0
+      tt.exems   = ?
+      tt.tskno   = atas.atasn
+      tt.ordno   = 0
+      tt.customs = 'ENTREPOT'
+      tt.ttsrc = "T3"
+      tt.wid = 0
+      .
+  end.
+
+  /*CSV VERSION SHOWING POSSIBLE ? FOR DATE-FIELDS**********
+  put unformatted "T,EMS-obj-nr,DocIn,DocnrIn,Status,InEntrepot,OutEntrepot,InAV,OutAV,Weight,CN-code,CIF-value,SALE-value,ExEMS,PIO,customs,DocOut,DocnrOut" skip.
+  def var D as char no-undo init ",".
+  for each tt no-lock
+  by tt.colno:
+    put unformatted
+      tt.ctype   
+    D '"' tt.colno   '"'
+    D tt.doctype 
+    D tt.docno   
+    D tt.xstac   
+    D tt.incsum  
+    D tt.outcsum 
+    D tt.inav    
+    D tt.outav   
+    D tt.wgt     
+    D tt.hscode  
+    D tt.cifval  
+    D tt.saleval 
+    D tt.exems   
+    D tt.tskno   
+    D tt.customs 
+    D tt.docout
+    D tt.docnrout
+    D tt.ttsrc
+    D tt.wid
+    skip.
+  ******************/
+  /*CSV VERSION SHOWING POSSIBLE "" FOR DATE-FIELDS RESULTING IN ?*/
+  put unformatted "T,EMS-obj-nr,DocIn,DocnrIn,Status,InEntrepot,OutEntrepot,InAV,OutAV,Weight,CN-code,CIF-value,SALE-value,ExEMS,PIO,customs,DocOut,DocnrOut" skip.
+  def var D as char no-undo init ",".
+  for each tt no-lock
+  by tt.colno:
+      if tt.ttsrc = "T2" and tt.customs = "EXIT" then
+       do:
+           FOR EACH b-coil WHERE b-coil.ocoic = tt.colno NO-LOCK:
+               FOR EACH cpal where cpal.cpaln = b-coil.cpaln NO-LOCK:
+                   FOR EACH ttruc WHERE ttruc.ttruc = cpal.ttruc NO-LOCK:
+                       find first tdocument where tdocument.ttruc = ttruck.ttruc no-lock no-error.
+                       if avail tdocument then 
+                       do:
+                           if ttruck.ttrult1 = true and b-coil.ocoileu = false then
+                               assign
+                                   tt.docout   = "T1"
+                                   tt.docnrout = tdoc.tdocc
+                                   tt.outcsum  = ttruck.ttrudexems.
+                           else if ttruck.ttruldocima = true and b-coil.ocoileu = false then
+                                   assign
+                                       tt.docout   = "IMA"
+                                       tt.docnrout = tdoc.tdocc
+                                       tt.outcsum  = ttruck.ttrudexems.
+                               else
+                                   assign
+                                       tt.docout   = tdocument.gdctc
+                                       tt.docnrout = tdoc.tdocc
+                                       tt.outcsum  = ttruck.ttrudexems
+                                       .
+
+                           if tt.docnrout begins "ART546" then
+                               assign tt.docout = "IMA".
+                       END.
+                   end.
+               END.
+           END.
+        end.
+        
+    put unformatted
+      tt.ctype
+    D '"' tt.colno   '"'
+    D tt.doctype
+    D tt.docno
+    D tt.xstac
+    D if tt.incsum = ? then '' else string(tt.incsum)
+    D if tt.outcsum = ? then '' else string(tt.outcsum)
+    D if tt.inav = ? then '' else string(tt.inav)
+    D if tt.outav = ? then '' else string(tt.outav)
+    D tt.wgt
+    D tt.hscode
+    D tt.cifval
+    D tt.saleval
+    D if tt.exems = ? then '' else string(tt.exems)
+    D tt.tskno
+    D tt.customs
+    D tt.docout
+    D tt.docnrout
+    D tt.ttsrc
+    D tt.wid
+    skip.
+  end.
+  put unformatted
+  skip(2)
+  "AANZUIVERINGSAFREKENING ACTIEVE VEREDELING SCHORSINGSSYSTEEM" skip(1)
+  "Vergunninghouder=Euro-Mit Staal B.V. EORI nummer: NL800275937" skip
+  "Bezoekadres=Duitslandweg 7. 4389 PJ  Ritthem  Havennummer 1153" skip
+  "Postadres=Postbus 535. 4380 AM  VLISSINGEN" skip
+  "Vergunning=Actieve Veredeling / schorsingssysteem. vergunningnummer: NL00740008734" skip
+  "Datum afgifte vergunning=27/5/2015" skip
+  "Laatste wijziging vergunning=" skip
+  "Aanzuiveringsperiode =" + string(year(iFromdate)) + "/" + string(month(iFromdate),"99") + "-" + string(month(iTodate),"99") skip(2)
+  "Legenda aanzuiveringsafrekening" skip(1)
+  "Kolom A=T (tekst;1 char) .. type object" skip
+  "Kolom B=EMS-obj-nr (tekst;7-35 chars) .. identificatie nummer van object" skip
+  "Kolom C=DocIn (tekst;1-5 chars) .. aanduiding documentsoort" skip
+  "Kolom D=DocnrIn (tekst;1-20 chars) .. document nummer" skip
+  "Kolom E=Status (getal;3 digits) .. huidige status object" skip
+  "Kolom F=InEntrepot (datum) .. datum in entrepot" skip
+  "Kolom G=OutEntrepot (datum) .. datum uit entrepot" skip
+  "Kolom H=InAV (datum) .. datum in actieve veredeling" skip
+  "Kolom I=OutAV (datum) .. datum uit actieve veredeling" skip
+  "Kolom J=Weight (getal;1-5 digits) .. gewicht van object" skip
+  "Kolom K=CN-code (tekst;22 chars) .. goederencode" skip
+  "Kolom L=CIF-value (getal) .. cif-waarde per ton" skip
+  "Kolom M=SALE-value (getal) .. verkoopprijs per ton" skip
+  "Kolom N=ExEMS (datum) .. datum object verscheept" skip
+  "Kolom O=PIO (getal;5-6 digits) .. referentie naar nummer produktie opdracht" skip
+  "Kolom P=Customs (tekst;1-10 chars) .. indicatie huidge (douane)status" skip
+  "Kolom Q=DocOut (tekst;1-5 chars) .. aanduiding documentsoort" skip
+  "Kolom R=DocnrOut (tekst;1-20 chars) .. document nummer" skip
+  .
+  
+  
+  /*------------------------------------------------------------------------------------------------------------------------------*/
+  /* ku v1.00 : Directly creates the excel sheet avoiding the mistakes. from user side. */
+  /* Excel Version */
+/*  def var v-excel      as com-handle no-undo.                                                                                                                                                                       */
+/*def var v-workbook   as com-handle no-undo.                                                                                                                                                                         */
+/*def var v-workSheet  as com-handle no-undo.                                                                                                                                                                         */
+/*def var v-workSheet2  as com-handle no-undo.                                                                                                                                                                        */
+/*def var v-selection  as com-handle no-undo.                                                                                                                                                                         */
+/*                                                                                                                                                                                                                    */
+/*def var v-tel           as int     no-undo.                                                                                                                                                                         */
+/*def var v-cnt           as int     no-undo.                                                                                                                                                                         */
+/*                                                                                                                                                                                                                    */
+/*  def var v-collabel as char no-undo.                                                                                                                                                                               */
+/*                                                                                                                                                                                                                    */
+/*                                                                                                                                                                                                                    */
+/*  create "Excel.Application" v-excel  no-error.                                                                                                                                                                     */
+/*  v-excel:visible       = false no-error.                                                                                                                                                                           */
+/*  v-excel:displayalerts = no.                                                                                                                                                                                       */
+/*                                                                                                                                                                                                                    */
+/*  v-Workbook    = v-Excel:Workbooks:add no-error.                                                                                                                                                                   */
+/*  v-WorkSheet  = v-Excel:Sheets:add().                                                                                                                                                                              */
+/*  v-WorkSheet2   = v-Excel:Sheets:add().                                                                                                                                                                            */
+/*                                                                                                                                                                                                                    */
+/*                                                                                                                                                                                                                    */
+/*   v-workSheet2:range(f-column(1,1)):value  = "AANZUIVERINGSAFREKENING ACTIEVE VEREDELING SCHORSINGSSYSTEEM".                                                                                                       */
+/*   v-workSheet2:range(f-column(1,3)):value  = "Vergunninghouder=Euro-Mit Staal B.V. EORI nummer: NL800275937".                                                                                                      */
+/*   v-workSheet2:range(f-column(1,4)):value  = "Bezoekadres=Duitslandweg 7. 4389 PJ  Ritthem  Havennummer 1153".                                                                                                     */
+/*   v-workSheet2:range(f-column(1,5)):value  = "Postadres=Postbus 535. 4380 AM  VLISSINGEN".                                                                                                                         */
+/*   v-workSheet2:range(f-column(1,6)):value  = "Vergunning=Actieve Veredeling / schorsingssysteem. vergunningnummer: NL00740008734".                                                                                 */
+/*   v-workSheet2:range(f-column(1,7)):value  = "Datum afgifte vergunning=27/5/2015".                                                                                                                                 */
+/*   v-workSheet2:range(f-column(1,8)):value  = "Laatste wijziging vergunning=".                                                                                                                                      */
+/*   v-workSheet2:range(f-column(1,9)):value  = "Aanzuiveringsperiode =" + string(year(iFromdate)) + "/" + string(month(iFromdate),"99") + "-" + string(month(iTodate),"99").                                         */
+/*   v-workSheet2:range(f-column(1,12)):value  = "Legenda aanzuiveringsafrekening".                                                                                                                                   */
+/*   v-workSheet2:range(f-column(1,14)):value  = "Kolom A=T (tekst;1 char) .. type object".                                                                                                                           */
+/*   v-workSheet2:range(f-column(1,15)):value  = "Kolom B=EMS-obj-nr (tekst;7-35 chars) .. identificatie nummer van object".                                                                                          */
+/*   v-workSheet2:range(f-column(1,16)):value  = "Kolom C=DocIn (tekst;1-5 chars) .. aanduiding documentsoort".                                                                                                       */
+/*   v-workSheet2:range(f-column(1,17)):value  = "Kolom D=DocnrIn (tekst;1-20 chars) .. document nummer".                                                                                                             */
+/*   v-workSheet2:range(f-column(1,18)):value  = "Kolom E=Status (getal;3 digits) .. huidige status object".                                                                                                          */
+/*   v-workSheet2:range(f-column(1,19)):value  = "Kolom F=InEntrepot (datum) .. datum in entrepot".                                                                                                                   */
+/*   v-workSheet2:range(f-column(1,20)):value  = "Kolom G=OutEntrepot (datum) .. datum uit entrepot".                                                                                                                 */
+/*   v-workSheet2:range(f-column(1,21)):value  = "Kolom H=InAV (datum) .. datum in actieve veredeling".                                                                                                               */
+/*   v-workSheet2:range(f-column(1,22)):value = "Kolom I=OutAV (datum) .. datum uit actieve veredeling".                                                                                                              */
+/*   v-workSheet2:range(f-column(1,23)):value = "Kolom J=Weight (getal;1-5 digits) .. gewicht van object".                                                                                                            */
+/*   v-workSheet2:range(f-column(1,24)):value = "Kolom K=CN-code (tekst;22 chars) .. goederencode".                                                                                                                   */
+/*   v-workSheet2:range(f-column(1,25)):value = "Kolom L=CIF-value (getal) .. cif-waarde per ton".                                                                                                                    */
+/*   v-workSheet2:range(f-column(1,26)):value = "Kolom M=SALE-value (getal) .. verkoopprijs per ton".                                                                                                                 */
+/*   v-workSheet2:range(f-column(1,27)):value = "Kolom N=ExEMS (datum) .. datum object verscheept".                                                                                                                   */
+/*   v-workSheet2:range(f-column(1,28)):value = "Kolom O=PIO (getal;5-6 digits) .. referentie naar nummer produktie opdracht".                                                                                        */
+/*   v-workSheet2:range(f-column(1,29)):value = "Kolom P=Customs (tekst;1-10 chars) .. indicatie huidge (douane)status".                                                                                              */
+/*   v-workSheet2:range(f-column(1,30)):value = "Kolom Q=DocOut (tekst;1-5 chars) .. aanduiding documentsoort".                                                                                                       */
+/*   v-workSheet2:range(f-column(1,31)):value = "Kolom R=DocnrOut (tekst;1-20 chars) .. document nummer".                                                                                                             */
+/*                                                                                                                                                                                                                    */
+/*                                                                                                                                                                                                                    */
+/* assign v-collabel = "T,EMS-obj-nr,DocIn,DocnrIn,Status,InEntrepot,OutEntrepot,InAV,OutAV,Weight,CN-code,CIF-value,SALE-value,ExEMS,PIO,customs". /*,DocOut,DocnrOut : Removed the last 2 coloumns as instructed  */*/
+/*                                                                                                                                                                                                                    */
+/*   repeat v-tel = 1 to num-entries(v-collabel) :                                                                                                                                                                    */
+/*       v-WorkSheet:range(f-column(v-tel,1)):value  = entry(v-tel,v-collabel).                                                                                                                                       */
+/*   end.                                                                                                                                                                                                             */
+/*                                                                                                                                                                                                                    */
+/*    assign v-tel = 1.                                                                                                                                                                                               */
+/*                                                                                                                                                                                                                    */
+/* for each tt no-lock                                                                                                                                                                                                */
+/*  by tt.colno:                                                                                                                                                                                                      */
+/*   assign v-tel = v-tel + 1.                                                                                                                                                                                        */
+/*   v-workSheet:range(f-column(1,v-tel)):value   = string(tt.ctype).                                                                                                                                                 */
+/*   v-workSheet:range(f-column(2,v-tel)):value   = '"' + string(tt.colno) + '"'.                                                                                                                                     */
+/*   v-workSheet:range(f-column(3,v-tel)):value   = string(tt.doctype).                                                                                                                                               */
+/*   v-workSheet:range(f-column(4,v-tel)):value   = string(tt.docno).                                                                                                                                                 */
+/*   v-workSheet:range(f-column(5,v-tel)):value   = string(tt.xstac).                                                                                                                                                 */
+/*   v-workSheet:range(f-column(6,v-tel)):value   = if tt.incsum = ? then '' else string(tt.incsum).                                                                                                                  */
+/*   v-workSheet:range(f-column(7,v-tel)):value   = if tt.outcsum = ? then '' else string(tt.outcsum).                                                                                                                */
+/*   v-workSheet:range(f-column(8,v-tel)):value   = if tt.inav = ? then '' else string(tt.inav).                                                                                                                      */
+/*   v-workSheet:range(f-column(9,v-tel)):value   = if tt.outav = ? then '' else string(tt.outav).                                                                                                                    */
+/*   v-workSheet:range(f-column(10,v-tel)):value  = string(tt.wgt).                                                                                                                                                   */
+/*   v-workSheet:range(f-column(11,v-tel)):value  = string(tt.hscode).                                                                                                                                                */
+/*   v-workSheet:range(f-column(12,v-tel)):value  = string(tt.cifval).                                                                                                                                                */
+/*   v-workSheet:range(f-column(13,v-tel)):value  = string(tt.saleval).                                                                                                                                               */
+/*   v-workSheet:range(f-column(14,v-tel)):value  = if tt.exems = ? then '' else string(tt.exems).                                                                                                                    */
+/*   v-workSheet:range(f-column(15,v-tel)):value  = string(tt.tskno).                                                                                                                                                 */
+/*   v-workSheet:range(f-column(16,v-tel)):value  = string(tt.customs).                                                                                                                                               */
+/*   v-workSheet:range(f-column(17,v-tel)):value  = string(tt.docout).                                                                                                                                                */
+/*   v-workSheet:range(f-column(18,v-tel)):value  = string(tt.docnrout).                                                                                                                                              */
+/*/*   v-workSheet:range(f-column(19,v-tel)):value  = string(tt.ttsrc).*/                 /* Removed the last 2 coloumns as instructed */                                                                             */
+/*/*   v-workSheet:range(f-column(20,v-tel)):value  = string(tt.wid).  */                                                                                                                                             */
+/*                                                                                                                                                                                                                    */
+/* end.                                                                                                                                                                                                               */
+/*                                                                                                                                                                                                                    */
+/*                                                                                                                                                                                                                    */
+/*                                                                                                                                                                                                                    */
+/*  v-excel:visible       = true no-error.                                                                                                                                                                            */
+/*                                                                                                                                                                                                                    */
+/*  release object v-selection no-error.                                                                                                                                                                              */
+/*  release object v-worksheet no-error.                                                                                                                                                                              */
+/*  release object v-workbook  no-error.                                                                                                                                                                              */
+/*  release object v-excel     no-error.                                                                                                                                                                              */
+  
+  /*------------------------------------------------------------------------------------------------------------------------------*/
+  /* Excel Version */
+  
+
+/*   /*TEXT VERSION*/ */
+/*for each tt no-lock                                                                               */
+/*   by tt.colno:                                                                                   */
+/*       if tt.ttsrc = "T2" and tt.customs = "EXIT" then                                            */
+/*       do:                                                                                        */
+/*           FOR EACH b-coil WHERE b-coil.ocoic = tt.colno NO-LOCK:                                 */
+/*               FOR EACH cpal where cpal.cpaln = b-coil.cpaln NO-LOCK:                             */
+/*                   FOR EACH ttruc WHERE ttruc.ttruc = cpal.ttruc NO-LOCK:                         */
+/*                       find first tdocument where tdocument.ttruc = ttruck.ttruc no-lock no-error.*/
+/*                       if ttruck.ttrult1 = true and b-coil.ocoileu = false then                   */
+/*                       assign                                                                     */
+/*                           tt.docout   = "T1".                                                    */
+/*                       else if ttruck.ttruldocima = true and b-coil.ocoileu = false then          */
+/*                       assign                                                                     */
+/*                           tt.docout   = "IMA".                                                   */
+/*                       else                                                                       */
+/*                       assign                                                                     */
+/*                           tt.docout   = tdocument.gdctc                                          */
+/*                           tt.docnrout = ttruck.tdocc                                             */
+/*                           .                                                                      */
+/*                   END.                                                                           */
+/*               END.                                                                               */
+/*           END.                                                                                   */
+/*        end.                                                                                      */
+/*                                                                                                  */
+/*     disp                                                                                         */
+/*     tt.ctype                                                                                     */
+/*     tt.colno                                                                                     */
+/*     tt.doctype                                                                                   */
+/*     tt.docno                                                                                     */
+/*     tt.xstac                                                                                     */
+/*     tt.incsum                                                                                    */
+/*     tt.outcsum                                                                                   */
+/*     tt.inav                                                                                      */
+/*     tt.outav                                                                                     */
+/*     tt.wgt                                                                                       */
+/*     tt.hscode                                                                                    */
+/*     /*tt.fromcol                                                                                 */
+/*     tt.fromwgt                                                                                   */
+/*     tt.fromhs  */                                                                                */
+/*     tt.cifval                                                                                    */
+/*     tt.saleval                                                                                   */
+/*     tt.exems                                                                                     */
+/*     tt.tskno                                                                                     */
+/*     tt.ordno                                                                                     */
+/*     tt.customs                                                                                   */
+/*     tt.docout                                                                                    */
+/*     tt.docnrout                                                                                  */
+/*     tt.ttsrc                                                                                     */
+/*     tt.wid                                                                                       */
+/*       with stream-io no-box width 255.                                                           */
+/*   end.                                                                                           */
+/*    */
+/*   put unformatted */
+/*   skip(2) */
+/*   "T = type coil(R,S,F,X) (raw material,semi-raw material,finished goods,scrap)" skip */
+/*   "EMS-obj-nr = unieke nummer voor object" skip */
+/*   "DocIn = type douane-document inkomend materiaal" skip */
+/*   "DocnrIn = nummer douane-document inkomend materiaal" skip */
+/*   "Status = status object (200,250,400,500,800,900) (available,available+planned,produced,palletized,exit,used)" skip */
+/*   "InEntrepot = datum object in entrepot opgenomen" skip */
+/*   "OutEntrepot = datum object uit entrepot" skip */
+/*   "InAV = datum object in actieve veredeling" skip */
+/*   "OutAV = datum object uit actieve veredeling" skip */
+/*   "Weight= gewicht object" skip */
+/*   "HS-code = hs-code object" skip */
+/*   "CIF-value = cif-waarde per ton in euro" skip */
+/*   "SALE-value = verkoop-waarde per ton in euro" skip */
+/*   "ExEMS = datum object verscheept" skip */
+/*   "PIO = interne nummer produktie-opdracht" skip */
+/*   "customs = lokatie of status object (EU,ENTREPOT,AVS,USED,EXIT)" skip */
+/*   "DocOut = type document uitgaand materiaal (T1,EUA,EXA)" skip */
+/*   "DocnrOut = nummer document uitgaand materiaal" skip */
+/*   skip. */
+END PROCEDURE.
+
+
+
+PROCEDURE ipR1:
+run ipInit.
+
+/*customs-report#10: list current objects in entrepot*/
+for each ocoi no-lock where ocoi.xlevc = '1'
+and ocoi.ocoitcustoms = 'ENTREPOT'
+and ocoi.xstac NE '900'
+and ocoi.xstac GE '200'
+and ocoi.ocoidexems EQ ?
+by ocoic:
+  nTotal1 = nTotal1 + 1.
+  qTotal1 = qTotal1 + ocoi.ocoinweight.
+  create tt2.
+  assign
+    tt2.coil = ocoi.ocoitcoil
+    tt2.id = ocoi.ocoic
+    tt2.qty = ocoi.ocoinweight
+    tt2.area = ocoi.ocoitcustoms
+    tt2.hscode = FN_HsCode(ocoi.ocoiawidth,ocoi.gjobc,"coil",ocoi.ggrac)
+    tt2.datebgn = if ocoi.ocoiddateinems NE ? then ocoi.ocoiddateinems else ocoi.ocoiddateinav.
+end.
+for first xset no-lock where xset.xsetc = "CsumScrap":
+  create tt2.
+  assign
+    tt2.coil = "scrap"
+    tt2.id = "scrap"
+    tt2.qty = integer(xset.xsett)
+    tt2.area = "ENTREPOT"
+    tt2.datebgn = ?
+    tt2.hscode = "7204290010" + /*"00" +*/ "0000" + "00000000".
+  nTotal1 = nTotal1 + 1.
+  qTotal1 = qTotal1 + integer(xset.xsett).
+end.
+
+{x/xxxxrhdrems.i &vRepTitle = "ENTREPOT" &vLineLen  = "111"}
+
+put unformatted
+  {inc\customs2015.i}
+  space(5) "Date    : " string(today,"99/99/9999")  skip
+  space(5) "Quantity: " nTotal1 skip
+  space(5) "Weight  : " qTotal1 " kgs" skip
+  space(5) "Details : " iDetails skip
+  skip(2).
+for each tt2 no-lock
+where tt2.area = 'ENTREPOT'
+break by tt2.coil:
+  disp space(5)
+    tt2.coil
+    tt2.id
+    tt2.qty
+    tt2.area
+    tt2.hscode
+  with stream-io no-box width 148.
+end.
+page.
+
+END PROCEDURE.
+
+
+PROCEDURE ipR2:
+run ipInit.
+
+/*customs-report#20: list current objects in av*/
+for each ocoi no-lock where ocoi.xlevc = '1'
+and ocoi.ocoitcustoms = 'AV'
+and ocoi.xstac LT '900'
+by ocoic:
+  nTotal1 = nTotal1 + 1.
+  qTotal1 = qTotal1 + ocoi.ocoinweight.
+  create tt2.
+  assign
+    tt2.coil = ocoi.ocoitcoil
+    tt2.id = ocoi.ocoic
+    tt2.qty = ocoi.ocoinweight
+    tt2.area = ocoi.ocoitcustoms
+    tt2.hscode = FN_HsCode(ocoi.ocoiawidth,ocoi.gjobc,"coil",ocoi.ggrac)
+    tt2.datebgn = ocoi.ocoiddateinav.
+end.
+
+{x/xxxxrhdrems.i &vRepTitle = "ACTIEVE VEREDELING" &vLineLen  = "111"}
+
+put unformatted
+  {inc\customs2015.i}
+  space(5) "Date    : " string(today,"99/99/9999")  skip
+  space(5) "Quantity: " nTotal2 skip
+  space(5) "Weight  : " qTotal2 " kgs" skip
+  space(5) "Details : " iDetails skip
+  skip(2).
+for each tt2 no-lock
+where tt2.area = 'AV'
+break by tt2.coil:
+  disp space(5)
+    tt2.coil
+    tt2.id
+    tt2.qty
+    tt2.area
+    tt2.hscode
+  with stream-io no-box width 148.
+end.
+page.
+
+END PROCEDURE.
+
+PROCEDURE ipR3:
+run ipInit.
+
+for each ocoi no-lock where ocoi.xlevc = '1'
+and ocoi.ocoidincsum GE iFromdate
+and ocoi.ocoidincsum LT iTodate:
+  if ocoi.ocoitcoil = "R" then do:
+    if ocoi.ocoitcoil = "R" then 
+    find first pbil no-lock where pbil.xlevc = '1' and pbil.pbiln = ocoi.pbiln.
+    if avail pbil then
+    find first pshi no-lock where pshi.xlevc = '1' and pshi.pshin = pbil.pshin.
+    create tt.
+    assign
+      tt.colno = ocoi.ocoic
+      tt.incsum = ocoi.ocoidincsum
+      tt.wgt = ocoi.ocoinweight
+      qTotal1 = qTotal1 + ocoi.ocoinweight
+      nTotal1 = nTotal1 + 1
+      tt.hscode = FN_HsCode(ocoi.ocoiawidth,ocoi.gjobc,"coil",ocoi.ggrac)
+      .
+    if ocoi.ocoitcoil = "R" then assign
+      tt.doctype = pshi.gdctc
+      tt.docno = string(pshi.pshincustomsno).
+  end.
+  else do:
+    if ocoi.ocoitcoil NE "R" then
+    find first acot no-lock where acot.xlevc = '1' and acot.ocoin = ocoi.ocoin.
+    create tt.
+    assign
+      tt.colno = ocoi.ocoic
+      tt.incsum = ocoi.ocoidincsum
+      tt.wgt = ocoi.ocoinweight
+      qTotal1 = qTotal1 + ocoi.ocoinweight
+      nTotal1 = nTotal1 + 1
+      tt.hscode = FN_HsCode(ocoi.ocoiawidth,ocoi.gjobc,"coil",ocoi.ggrac)
+      .
+    if ocoi.ocoitcoil = "R" then assign
+      tt.doctype = pshi.gdctc
+      tt.docno = string(pshi.pshincustomsno).
+    else assign
+      tt.doctype = 'AVS' /*+ string(year(iFromdate),"9999") + string(month(iFromdate),"99")*/
+      tt.docno = string(acot.atasn).
+  end.
+end.
+for first xset no-lock where xset.xsetc = "CsumScrap":
+  create tt.
+  assign
+    tt.colno = "scrap"
+    tt.incsum = ?
+    tt.wgt = integer(xset.xsett)
+    tt.doctype = 'AVS'
+    tt.docno = ''
+    qTotal1 = qTotal1 + integer(xset.xsett)
+    nTotal1 = nTotal1 + 1
+    tt.hscode = "7204290010" + /*"00" +*/ "0000" + "00000000"
+    .
+end.
+page.
+
+{x/xxxxrhdrems.i &vRepTitle = "INSLAG ENTREPOT" &vLineLen  = "111"}
+
+put unformatted
+  {inc\customs2015.i}
+  space(5) "Period  : " string(iFromdate,"99/99/9999") " - " string(iTodate,"99/99/9999") skip
+  space(5) "Quantity: " nTotal1 skip
+  space(5) "Weight  : " qTotal1 " kgs" skip
+  space(5) "Details : " iDetails skip
+  skip(2).
+for each tt no-lock
+break by doctype by docno:
+  n = n + 1.
+  q = q + wgt.
+  if last-of(docno) then do:
+    disp space(5)
+      tt.doctype column-label "Doc"
+      tt.docno column-label "No"
+      n column-label "#"
+      q column-label "Wgt"
+    with stream-io no-box width 148.
+    nTotal1 = nTotal1 + n.
+    n = 0. q = 0.
+  end.
+end.
+if iDetails = true then do:
+put skip(2).
+for each tt no-lock
+break by doctype by docno:
+  disp space(5)
+    tt.colno
+    tt.wgt
+    tt.incsum
+    tt.doctype column-label "Doc"
+    tt.docno column-label "No"
+  with stream-io no-box width 148.
+end.
+end.
+page.
+
+END PROCEDURE.
+
+PROCEDURE ipR4:
+run ipInit.
+
+for each ocoi no-lock where ocoi.xlevc = '1'
+and ocoi.ocoidoutcsum GE iFromdate
+and ocoi.ocoidoutcsum LT iTodate:
+  if ocoi.ocoiddateinav NE ? then 
+  find first acin no-lock where acin.xlevc = '1' and acin.ocoin = ocoi.ocoin.
+  create tt.
+  assign
+    tt.colno = ocoi.ocoic
+/*     tt.doctype = 'AVS' */
+/*    tt.docno = string(acin.atasn)*/
+    tt.doctype = if avail acin then 'AVS' else "T1/EU/EX"
+    tt.docno = if avail acin then string(acin.atasn) else "T1/EU/EX"
+    tt.outcsum = ocoi.ocoidoutcsum
+    tt.wgt = ocoi.ocoinweight
+    qTotal1 = qTotal1 + ocoi.ocoinweight
+    nTotal1 = nTotal1 + 1
+    .
+end.
+
+{x/xxxxrhdrems.i &vRepTitle = "UITSLAG ENTREPOT" &vLineLen  = "111"}
+
+put unformatted
+  {inc\customs2015.i}
+  space(5) "Period  : " string(iFromdate,"99/99/9999") " - " string(iTodate,"99/99/9999") skip
+  space(5) "Quantity: " nTotal1 skip
+  space(5) "Weight  : " qTotal1 " kgs" skip
+  space(5) "Details : " iDetails skip
+  skip(2).
+for each tt no-lock
+break by doctype by docno:
+  n = n + 1.
+  q = q + wgt.
+  if last-of(docno) then do:
+    disp space(5)
+      tt.doctype column-label "Doc"
+      tt.docno column-label "No"
+      n column-label "#"
+      q column-label "Wgt"
+    with stream-io no-box width 148.
+    nTotal1 = nTotal1 + n.
+    n = 0. q = 0.
+  end.
+end.
+if iDetails = true then do:
+put skip(2).
+for each tt no-lock
+break by doctype by docno:
+  disp space(5)
+    tt.colno
+    tt.wgt
+    tt.outcsum
+    tt.doctype column-label "Doc"
+    tt.docno column-label "No"
+  with stream-io no-box width 148.
+end.
+end.
+page.
+
+END PROCEDURE.
+
+PROCEDURE ipR5:
+/*message 'ALERT SYSADMIN(566) SOMETHING ODD' view-as alert-box error.*/
+run ipInit.
+
+for each ocoi no-lock where ocoi.xlevc = '1'
+and ocoi.ocoiddateinav GE iFromdate
+and ocoi.ocoiddateinav LT iTodate:
+  find first acin no-lock where acin.xlevc = '1' and acin.ocoin = ocoi.ocoin.
+  find first atas no-lock where atas.xlevc = '1' and atas.atasn = acin.atasn.
+  create tt.
+  assign
+    tt.colno = ocoi.ocoic
+    tt.inav = ocoi.ocoiddateinav
+    tt.wgt = ocoi.ocoinweight
+    tt.doctype = 'AVS'
+    tt.docno = string(atas.atasn)
+    tt.hscode = FN_HsCode(ocoi.ocoiawidth,ocoi.gjobc,"coil",ocoi.ggrac)
+    qTotal1 = qTotal1 + ocoi.ocoinweight
+    nTotal1 = nTotal1 + 1
+    .
+end.
+
+{x/xxxxrhdrems.i &vRepTitle = "INSLAG ACTIEVE VEREDELING" &vLineLen  = "111"}
+
+put unformatted
+  {inc\customs2015.i}
+  space(5) "Period  : " string(iFromdate,"99/99/9999") " - " string(iTodate,"99/99/9999") skip
+  space(5) "Quantity: " nTotal1 skip
+  space(5) "Weight  : " qTotal1 " kgs" skip
+  space(5) "Details : " iDetails skip
+  skip(2).
+for each tt no-lock
+break by doctype by docno:
+  n = n + 1.
+  q = q + wgt.
+  if last-of(docno) then do:
+    disp space(5)
+      tt.doctype column-label "Doc"
+      tt.docno column-label "No"
+      tt.hscode
+      n column-label "#"
+      q column-label "Wgt"
+    with stream-io no-box width 148.
+    nTotal1 = nTotal1 + n.
+    n = 0. q = 0.
+  end.
+end.
+if iDetails = true then do:
+put skip(2).
+for each tt no-lock
+break by doctype by docno:
+  disp space(5)
+    tt.colno
+    tt.wgt
+    tt.inav
+    tt.doctype column-label "Doc"
+    tt.docno column-label "No"
+    tt.hscode
+  with stream-io no-box width 148.
+end.
+end.
+page.
+
+END PROCEDURE.
+
+PROCEDURE ipR6:
+run ipInit.
+
+for each ocoi no-lock where ocoi.xlevc = '1'
+and ocoi.ocoidoutav GE iFromdate
+and ocoi.ocoidoutav LT iTodate:
+  find first acot no-lock where acot.xlevc = '1' and acot.ocoin = ocoi.ocoin.
+  find first atas no-lock where atas.xlevc = '1' and atas.atasn = acot.atasn.
+  find first acin no-lock where acin.xlevc = '1' and acin.atasn = acin.atasn.
+  find first bfUsedcoil no-lock where bfUsedcoil.xlevc = '1' and bfUsedcoil.ocoin = acin.ocoin.
+  create tt.
+  assign
+    tt.colno = ocoi.ocoic
+    tt.outav = ocoi.ocoidoutav
+    tt.wgt = ocoi.ocoinweight
+    tt.doctype = 'AVS'
+    tt.docno = string(atas.atasn)
+    tt.hscode = FN_HsCode(ocoi.ocoiawidth,ocoi.gjobc,"coil",ocoi.ggrac)
+    tt.fromcol = bfUsedcoil.ocoic
+    tt.fromwgt = bfUsedcoil.ocoinweight
+    tt.fromhs = FN_HsCode(bfUsedcoil.ocoiawidth,bfUsedcoil.gjobc,"coil",bfUsedcoil.ggrac)
+    qTotal1 = qTotal1 + ocoi.ocoinweight
+    nTotal1 = nTotal1 + 1
+    .
+end.
+for each tt no-lock
+break by tt.docno:
+  if last-of(tt.docno) then do:
+    for each acin no-lock where acin.xlevc = '1'
+    and acin.atasn = integer(tt.docno):
+      vUsedWgt = vUsedWgt + acin.acinnweight.
+    end.
+    for each acot no-lock where acot.xlevc = '1'
+    and acot.atasn = integer(tt.docno):
+      vProdWgt = vProdWgt + acot.acotnweight.
+    end.
+  end.
+end.
+  create tt.
+  assign
+    tt.colno = "scrap"
+    tt.outav = ?
+    tt.wgt = vUsedWgt - vProdWgt
+    tt.doctype = 'AVS'
+    tt.docno = "scrap"
+    tt.hscode = "7204290010" + /*"00" +*/ "0000" + "00000000"
+    qTotal1 = qTotal1 + vUsedWgt - vProdWgt
+    nTotal1 = nTotal1 + 1
+    .
+
+{x/xxxxrhdrems.i &vRepTitle = "UITSLAG ACTIEVE VEREDELING" &vLineLen  = "111"}
+
+put unformatted
+  {inc\customs2015.i}
+  space(5) "Period  : " string(iFromdate,"99/99/9999") " - " string(iTodate,"99/99/9999") skip
+  space(5) "Quantity: " nTotal1 skip
+  space(5) "Weight  : " qTotal1 " kgs" skip
+  space(5) "Details : " iDetails skip
+  skip(2).
+for each tt no-lock
+break by doctype by docno:
+  n = n + 1.
+  q = q + wgt.
+  if last-of(docno) then do:
+    disp space(5)
+      tt.doctype column-label "Doc"
+      tt.docno column-label "No"
+      tt.hscode
+      n column-label "#"
+      q column-label "Wgt"
+    with stream-io no-box width 148.
+    nTotal1 = nTotal1 + n.
+    n = 0. q = 0.
+  end.
+end.
+if iDetails = true then do:
+put skip(2).
+for each tt no-lock
+break by doctype by docno:
+  disp space(5)
+    tt.colno
+    tt.wgt
+    tt.outav
+    tt.doctype column-label "Doc"
+    tt.docno column-label "No"
+    tt.hscode
+  with stream-io no-box width 148.
+end.
+end.
+page.
+
+END PROCEDURE.
+
+PROCEDURE ipR7old:
+
+  for each ocoi no-lock where ocoi.xlevc = '1'
+  and 
+  (
+  (ocoi.ocoidincsum GE iFromdate and ocoi.ocoidincsum LT iTodate)
+  or
+  (ocoi.ocoiddateinav GE iFromdate and ocoi.ocoiddateinav LT iTodate)
+  ):
+    put
+      ocoi.xstac at 2
+      ocoi.ocoitcoil at 7
+      ocoi.ocoic at 9
+      ocoi.ocoitcustoms at 40
+      ocoi.ocoidincsum  at 50
+      ocoi.ocoidoutcsum at 60
+      ocoi.ocoiddateinav format "99/99/99" at 70
+      ocoi.ocoidoutav at 80
+      ocoi.ocoiawidth
+      ocoi.ocoinweight
+      "  " FN_HsCode(ocoi.ocoiawidth,ocoi.gjobc,"coil",ocoi.ggrac) format "x(10)" 
+      ocoi.ocoiapurchval
+      skip.
+    for each bProd no-lock where bProd.xlevc = '1'
+    and bProd.ocoinmclno = ocoi.ocoin
+    and bProd.ocoitcoil NE 'r',
+    first acot no-lock where acot.xlevc = '1'
+    and acot.ocoin = bProd.ocoin
+    by bProd.ocoic:
+      if bProd.sordn GT 0 then
+      find first sord no-lock where sord.xlevc = '1' and sord.sordn = bProd.sordn.
+      put
+        bProd.xstac at 2
+        bProd.ocoitcoil at 7
+        bProd.ocoic at 9
+        bProd.ocoitcustoms at 40
+        bProd.ocoidincsum at 50
+        bProd.ocoidoutcsum at 60
+        bProd.ocoiddateinav format "99/99/99" at 70
+        bProd.ocoidoutav at 80
+        bProd.ocoiawidth
+        bProd.ocoinweight
+        "  " FN_HsCode(bProd.ocoiawidth,bProd.gjobc,"coil",bProd.ggrac) format "x(10)" 
+        bProd.ocoiapurchval
+        bProd.sordn
+        if bProd.sordn GT 0 then sord.sordaordprice else 0 
+        " " bProd.ocoidexems
+        " " bProd.gdctc format "x(5)"
+        bProd.ocoitdocno format "x(20)"
+        acot.atasn
+        skip.
+    end.
+  end.
+
+  for first xset no-lock where xset.xsetc = "CsumScrap":
+    put
+      '...' at 2
+      'X' at 7
+      'scrap' at 9
+      'ENTREPOT' at 40
+      ? at 50
+      ? at 60
+      ? format "99/99/99" at 70
+      ? at 80
+      '*' at 96
+      integer(xset.xsett) at 102
+      "  " '"7204290010' + /*"00" +*/ "0000" + '00000000"' format "x(10)" 
+      0 at 130
+      0  at 140
+      skip.
+  end.
+
+END PROCEDURE.
+
+/*---FUNCTIONS-------------------------------------------------------*/
+
+FUNCTION FN_HsCode returns character (input pWid as deci,input pJob as char, input pProduct as char, input pGrade as char):
+  /* NOTES: ems uses 8 chars for hs-code, customs wants 22 chars, decided to add zeros after first 8*/
+  def var returnvalue as char no-undo.
+  
+  define variable cbscodes as char no-undo initial "7226110091,7226110011,7225110010,7212101000,7210122000,7210301000,8504901899".
+  define variable vCode    as inte no-undo extent 7 initial 0.
+
+  if pProduct = "Laminations" then do:
+    vCode[7] = vCode[7] + 1.
+  end.
+  else do:
+    if pJob = "S" then do:
+      if pwid LE 500                  then assign vCode[1] = vCode[1] + 1.
+      if pwid GT 500 and pwid LT 600 then assign vCode[2] = vCode[2] + 1.
+      if pwid GE 600                  then assign vCode[3] = vCode[3] + 1.
+    end.            
+    
+    if pJob = "T" and (pGrade = "TPDR7BA" or pGrade = "TPDR7BA22") then do:
+      if pwid LT 600 then assign vCode[4] = vCode[4] + 1.
+      if pwid GE 600 then assign vCode[5] = vCode[5] + 1.
+    end.
+    
+    if pJob = "T" and (pGrade = "EGNSC700") then do:
+      assign vCode[6] = vCode[6] + 1.
+    end.
+  end.
+  
+  if maximum(vCode[1],vCode[2],vCode[3],vCode[4],vCode[5],vCode[6],vCode[7]) = 0 then returnvalue = " ".
+  else if vCode[1] = maximum(vCode[1],vCode[2],vCode[3],vCode[4],vCode[5],vCode[6],vCode[7]) then returnvalue = entry(1,cbscodes).
+  else if vCode[2] = maximum(vCode[1],vCode[2],vCode[3],vCode[4],vCode[5],vCode[6],vCode[7]) then returnvalue = entry(2,cbscodes).
+  else if vCode[3] = maximum(vCode[1],vCode[2],vCode[3],vCode[4],vCode[5],vCode[6],vCode[7]) then returnvalue = entry(3,cbscodes).
+  else if vCode[4] = maximum(vCode[1],vCode[2],vCode[3],vCode[4],vCode[5],vCode[6],vCode[7]) then returnvalue = entry(4,cbscodes).
+  else if vCode[5] = maximum(vCode[1],vCode[2],vCode[3],vCode[4],vCode[5],vCode[6],vCode[7]) then returnvalue = entry(5,cbscodes).
+  else if vCode[6] = maximum(vCode[1],vCode[2],vCode[3],vCode[4],vCode[5],vCode[6],vCode[7]) then returnvalue = entry(6,cbscodes).
+  else returnvalue = entry(7,cbscodes).
+  
+  if returnvalue begins "8" then
+  assign returnvalue = returnvalue + /*"00" +*/ "0000" + "00000000".
+  else
+  assign returnvalue = returnvalue + /*"00" +*/ gProducer + "00000000".
+
+  return returnvalue.
+  
+END FUNCTION.
+
+function f-column returns character
+  ( input v-row as int,
+    input v-col as int) :
+
+  def var v-collet as char init "A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z,AA,AB,AC,AD,AE,AF,AG,AH,AI,AJ,AK,AL,AM,AN,AO,AP,AQ,AR,AS,AT,AU,AV,AW,AX,AY,AZ,BA,BB,BC,BD,BE,BF,BG,BH,BI,BJ,BK,BL,BM,BN,BO,BP,BQ,BR,BS,BT,BU,BV,BW,BX,BY,BZ,CA,CB,CC,CD,CE,CF,CG,CH,CI,CJ,CK,CL,CM,CN,CO,CP,CQ,CR,CS,CT,CU,CV,CW,CX,CY,CZ,DA,DB,DC,DD,DE,DF,DG,DH,DI,DJ,DK,DL,DM,DN,DO,DP,DQ,DR,DS,DT,DU,DV,DW,DX,DY,DZ".
+  def var v-collab as char no-undo.
+
+  assign v-collab =  entry(v-row,v-collet).
+
+  return v-collab + trim(string(v-col,'>>>')).
+
+end function.
+

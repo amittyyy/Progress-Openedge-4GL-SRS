@@ -1,0 +1,32 @@
+/***************Define needed variables************/
+DEFINE QUERY qQueryName FOR ocoi.
+DEFINE VARIABLE hQueryHandle AS HANDLE.
+
+/* Set the static query handle and open it */
+hQueryHandle = QUERY qQueryName:HANDLE.
+OPEN QUERY qQueryName FOR EACH ocoi WHERE ocoi.xlevc = "1" AND 
+                                   ocoil.ocoic = '3065164X01' NO-LOCK.
+
+/*Extract the index usage information */
+MESSAGE hQueryHandle:INDEX-INFORMATION
+    VIEW-AS ALERT-BOX INFO BUTTONS OK.
+
+
+/***************Define needed variables************/
+DEFINE QUERY qQueryName FOR ocoi.
+DEFINE VARIABLE hQueryHandle AS HANDLE.
+
+/* Set the static query handle and open it */
+hQueryHandle = QUERY qQueryName:HANDLE.
+OPEN QUERY qQueryName  for each ocoi
+    where ocoi.xlevc = "1"
+    and ocoi.ocoitcoil = "R" 
+    and ocoi.ggrac = "23zdkh85"
+    and ocoi.xstac LE '150'
+    and ocoi.gjobc = "S"
+    and ocoi.sfran = 448  NO-LOCK.
+
+/*Extract the index usage information */
+MESSAGE hQueryHandle:INDEX-INFORMATION
+    VIEW-AS ALERT-BOX INFO BUTTONS OK.
+
