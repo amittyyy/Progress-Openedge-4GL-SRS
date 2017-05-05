@@ -1,0 +1,46 @@
+
+/*Query*/
+
+
+
+
+/* ------------------------ Copyright Javra Software ---------------------------
+
+File : script 
+Description : To hide the changed by, date, time, department. 
+Created : 15/07/08 amit timilsina 
+
+Date Author Version Description 
+-------- ------ ------- ---------------------------------------------------------
+15/07/08 amity 1.00 Created 
+--------------------------------------------------------------------------------*/
+DEF VAR V-COUNT AS INTEGER NO-UNDO INIT 1.
+
+DISABLE TRIGGERS FOR LOAD OF xwidget. /* amity: disabling the triiger */ 
+FOR EACH xprog WHERE xprog.xprolreserved <> YES 
+AND xprog.xprolprivate <> YES
+NO-LOCK,
+
+EACH xwidget OF xprog WHERE xwidget.xproc = xprog.xproc
+AND (xwidget.xwidc MATCHES ("*xdepc")
+OR xwidget.xwidc MATCHES ("*tsendtodb")
+OR xwidget.xwidc MATCHES ("*tsendtime")
+OR xwidget.xwidc MATCHES ("*tsendxusec")
+OR xwidget.xwidc MATCHES ("*dsend")
+OR xwidget.xwidc = 'xstac').
+
+IF xwidget.xproc BEGINS "x" THEN LEAVE. /* leave program if start with "x"*/
+
+
+
+ /*REPEAT WHILE V-COUNT < 100:
+ASSIGN V-COUNT= V-COUNT + 1.*/
+IF xwidget.xwidc = 'xstac' THEN /*amity: This is for moving the status to the top of the program.*/
+    DO:
+    ASSIGN xwidget.xwidnrow = 14
+    xwidget.xwidncolumn = 770.                                                                
+    END.
+ELSE
+    ASSIGN xwidget.xwidlhide = YES. /*amity: To hide the changed by, date, time, department*/
+DISPLAY xwidget.xproc xwidget.xwidc xwidget.xwidlhide. 
+END.    

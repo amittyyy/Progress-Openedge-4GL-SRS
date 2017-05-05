@@ -1,0 +1,39 @@
+ADD INDEX "i_ocoileurep" ON "ocoil"
+  AREA "Schema Area"
+  DESCRIPTION "Coils in port reprot"
+  INDEX-FIELD "xlevc" ASCENDING
+  INDEX-FIELD "ocoitcoil" ASCENDING
+  INDEX-FIELD "ocoileu" ASCENDING
+  INDEX-FIELD "gjobc" ASCENDING
+  INDEX-FIELD "ocoiddateinems" ASCENDING
+
+ADD FIELD "tdocteu" OF "tdocument" AS character
+  DESCRIPTION "EUA/EXA Reference for eu materials"
+  FORMAT "x(25)"
+  POSITION 19
+  INITIAL ""
+  LABEL "EUA/EXA Reference"
+  COLUMN-LABEL "EUA/EXA Reference"
+  ORDER 180
+  MAX-WIDTH 16
+
+UPDATE FIELD "tdocc" OF "ttruck"
+  DESCRIPTION "T1/IMA Document"
+  LABEL "T1/IMA Document"
+  COLUMN-LABEL "T1/IMA Document"
+
+ADD FIELD "tdocteu" OF "ttruck" AS character
+  DESCRIPTION "EUA/EXA Document"
+  FORMAT "x(25)"
+  POSITION 55
+  INITIAL ""
+  LABEL "EUA/EXA Document"
+  COLUMN-LABEL "EUA/EXA Document"
+  ORDER 560
+  MAX-WIDTH 50
+
+.
+PSC
+cpstream=ISO8859-1
+.
+0000000877

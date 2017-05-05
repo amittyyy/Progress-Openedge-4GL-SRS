@@ -1,0 +1,71 @@
+DISABLE TRIGGERS FOR LOAD OF ocoi.
+    FOR EACH ocoi WHERE ocoi.cpaln = 363007:
+       ASSIGN ocoi.xstac = '995'.
+    DISPLAY ocoi.xstac ocoi.cpaln ocoi.ocoin.
+END.
+
+
+
+
+FOR EACH omut WHERE omut.ocoin = 3021565:
+    DISPLAY omut WITH WIDTH 300.
+END.
+
+
+
+FOR EACH cpal WHERE cpal.cpaln = 363007:
+    DISPLAY cpal.
+END.
+
+
+
+
+
+DISABLE TRIGGERS FOR LOAD OF ostk.
+can-find(first ocoi where ocoi.xlevc = '1' and ocoi.cpaln = 363007 and ocoi.xstac = '995'). /*product coil found..*/
+    for first ocoi where ocoi.xlevc = '1' and ocoi.cpaln = 363007,
+        first olyr where olyr.xlevc = '1' and olyr.ocoin = ocoi.ocoin,
+            first ostk where ostk.xlevc = '1' and ostk.ostkn = olyr.ostkn
+                         and  ostk.ostktshape begins "SS":
+      /* ASSIGN ostk.ostktshape = "SS".*/
+        MESSAGE ostk.ostktshape VIEW-AS ALERT-BOX.
+
+
+		
+	
+
+
+
+/* second session */
+
+DISABLE TRIGGERS FOR LOAD OF ocoi.
+    FOR EACH ocoi WHERE ocoi.cpaln = 366414:
+     ASSIGN ocoi.xstac = '995'.
+    DISPLAY ocoi.xstac ocoi.cpaln ocoi.ocoin.
+END.
+
+
+
+
+
+   for first ocoi where ocoi.xlevc = '1' and ocoi.cpaln = 366414,
+      first olyr where olyr.xlevc = '1' and olyr.ocoin = ocoi.ocoin,
+        first ostk where ostk.xlevc = '1' and ostk.ostkn = olyr.ostkn
+             and  ostk.ostktshape begins "SS":
+
+       DISPLAY ocoi.ocoin olyr.ocoin olyr.ostkn ostk.ostkn ostk.ostktshape.
+
+
+
+FOR EACH cpal WHERE cpal.cpaln = 366414:
+    DISPLAY cpal.
+END.
+
+
+
+DISABLE TRIGGERS FOR LOAD OF ocoi.
+    FOR EACH ocoi WHERE ocoi.cpaln = 366414:
+     ASSIGN ocoi.xstac = '995'.
+    DISPLAY ocoi.xstac ocoi.cpaln ocoi.ocoin.
+END.
+	   
